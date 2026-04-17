@@ -20,11 +20,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        // Create participants list HTML
+        let participantsHTML = "";
+        if (details.participants && details.participants.length > 0) {
+          participantsHTML = `<div class="participants-section"><strong>Participants:</strong><ul class="participants-list">` +
+            details.participants.map(p => `
+              <li style="list-style-type:none;display:flex;align-items:center;justify-content:space-between;">
+                <span>${p}</span>
+                <button class="delete-participant-btn" title="Remove participant" data-activity="${name}" data-email="${p}" style="background:none;border:none;color:#c62828;font-size:18px;cursor:pointer;padding:0 6px;">&#10006;</button>
+              </li>
+            `).join("") +
+            `</ul></div>`;
+        } else {
+          participantsHTML = `<div class="participants-section"><strong>Participants:</strong> <span class="no-participants">No one signed up yet.</span></div>`;
+        }
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          ${participantsHTML}
         `;
 
         activitiesList.appendChild(activityCard);
@@ -41,6 +57,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Handle participant removal (event delegation)
+  activitiesList.addEventListener("click", async (event) => {
+    if (event.target.classList.contains("delete-participant-btn")) {
+      const activity = event.target.getAttribute("data-activity");
+      const email = event.target.getAttribute("data-email");
+      if (!activity || !email) return;
+      if (!confirm(`Remove ${email} from ${activity}?`)) return;
+      try {
+        const response = await fetch(`/activities/${encodeURIComponent(activity)}/signup?email=${encodeURIComponent(email)}`, {
+          method: "DELETE"
+        });
+        const result = await response.json();
+        if (response.ok) {
+          // Refresh activities list
+          fetchActivities();
+          messageDiv.textContent = result.message || "Participant removed.";
+          messageDiv.className = "success";
+        } else {
+          messageDiv.textContent = result.detail || "Failed to remove participant.";
+          messageDiv.className = "error";
+        }
+        messageDiv.classList.remove("hidden");
+        setTimeout(() => {
+          messageDiv.classList.add("hidden");
+        }, 5000);
+      } catch (error) {
+        messageDiv.textContent = "Failed to remove participant.";
+        messageDiv.className = "error";
+        messageDiv.classList.remove("hidden");
+      }
+    }
+  });
   // Handle form submission
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -62,6 +110,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities list to show new participant
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
